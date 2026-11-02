@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#050505">
+<title>Haftalık Çetele</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single dark column, sticky week header, item rows grouped like the sheet */
+:root{
+  --bg:#050505; --panel:#0d0d0e; --line:#1c1c1f; --line-2:#2a2a2e;
+  --fg:#f2f2f2; --muted:#8a8a90; --faint:#4a4a50; --on:#f2f2f2; --on-ink:#050505;
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--sans);font-size:15px;line-height:1.4;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:18px 14px;border-bottom:1px solid var(--line)}
+.weeknav{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.weeknav h1{margin:0;font-weight:500;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.weeknav .range{font-family:var(--mono);font-size:15px;color:var(--fg);letter-spacing:0;text-transform:none;display:block;margin-top:2px}
+.navbtns{display:flex;gap:6px}
+button{font:inherit;color:inherit;background:none;border:1px solid var(--line-2);border-radius:8px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.navbtns button{width:38px;height:38px;font-size:16px}
+.navbtns button.today{width:auto;padding:0 12px;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.totals{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.tot .k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.tot .v{font-family:var(--mono);font-size:30px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.tot .s{font-family:var(--mono);font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+.bar{height:2px;background:var(--line);margin-top:14px;position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--fg);transition:width .3s}
+section{margin-top:28px}
+section h2{margin:0 0 6px;font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+section h2 span{font-family:var(--mono);letter-spacing:0;color:var(--faint)}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding-block:12px;border-top:1px solid var(--line)}
+.name{font-size:15px;font-weight:500}
+.meta{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px}
+.meta b{font-weight:400;color:var(--fg)}
+.days{display:flex;gap:4px}
+.day{width:32px;height:38px;border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;color:var(--muted);padding:0;gap:3px}
+.day .dot{width:8px;height:8px;border-radius:50%;border:1px solid var(--faint)}
+.day.on{background:var(--on);border-color:var(--on);color:var(--on-ink)}
+.day.on .dot{background:var(--on-ink);border-color:var(--on-ink)}
+.day.now{border-color:var(--fg)}
+.day.future{opacity:.35}
+.step{display:flex;align-items:center;gap:0;border:1px solid var(--line-2);border-radius:8px;overflow:hidden}
+.step button{border:0;border-radius:0;width:40px;height:38px;font-size:18px}
+.step button:disabled{color:var(--faint);cursor:default}
+.step output{min-width:46px;text-align:center;font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums;border-inline:1px solid var(--line-2);line-height:38px}
+.toggle{height:38px;padding:0 14px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.toggle.on{background:var(--on);color:var(--on-ink);border-color:var(--on)}
+.status{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:28px;text-align:center}
+@media (max-width:420px){
+  .row.daily{grid-template-columns:1fr}
+  .row.daily .days{justify-content:space-between}
+  .day{width:auto;flex:1}
+}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+body{margin:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="weeknav">
+      <h1>Çetele<span class="range" id="range">—</span></h1>
+      <div class="navbtns">
+        <button id="prev" aria-label="Previous week">‹</button>
+        <button id="now" class="today">This week</button>
+        <button id="next" aria-label="Next week">›</button>
+      </div>
+    </div>
+    <div class="totals">
+      <div class="tot"><div class="k">Week</div><div class="v" id="wk">0</div><div class="s" id="wkmax">of 15,950</div></div>
+      <div class="tot"><div class="k" id="mlabel">Month</div><div class="v" id="mo">0</div><div class="s" id="mweeks">0 weeks</div></div>
+    </div>
+    <div class="bar"><i id="barfill" style="width:0"></i></div>
+  </header>
+  <main id="main"></main>
+  <div class="status" id="status">Loading…</div>
+</div>
+
+<script>
+// ── Supabase: paste your project URL and anon key here. Leave blank to save on this device only.
+const SUPABASE_URL = "https://aeejbbjzrqtnbbcmmmup.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFlZWpiYmp6cnF0bmJiY21tbXVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM1ODU4NTcsImV4cCI6MjEwOTE2MTg1N30.8GdzYeUTDQs1e8vH_y-nmND2GZMgWhcjMn4iemNp-qs";
+const TABLE = "cetele_weeks";
+
+const ITEMS=[
+ {g:"Haftalık görevler",k:"istisare",n:"İstişare",p:500,t:"once"},
+ {g:"Haftalık görevler",k:"nobet",n:"Nöbet",p:500,t:"once"},
+ {g:"Haftalık görevler",k:"temizlik",n:"Temizlik",p:500,t:"once"},
+ {g:"Namaz",k:"sabah",n:"Sabah Namazı",p:350,t:"daily"},
+ {g:"Namaz",k:"teheccud",n:"Teheccüd",p:500,t:"daily"},
+ {g:"Namaz",k:"aksam",n:"Akşam Namazı",p:200,t:"daily"},
+ {g:"Namaz",k:"yatsi",n:"Yatsı Namazı",p:200,t:"daily"},
+ {g:"Namaz",k:"tesbihat",n:"Tesbihat",p:200,t:"count",cap:null,target:5,note:"x5+"},
+ {g:"Okuma",k:"mukabele",n:"Kur'an Mukabele",p:500,t:"count",cap:5},
+ {g:"Okuma",k:"kitapFull",n:"Kitap Okuma (tam)",p:500,t:"count",cap:null,target:2,note:"x2+"},
+ {g:"Okuma",k:"kitap",n:"Kitap Okuma",p:300,t:"count",cap:5},
+ {g:"Aktivite",k:"aktivite",n:"Aktivite",p:300,t:"once"},
+];
+const DAYS=["M","T","W","T","F","S","S"];
+const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const fmt=n=>n.toLocaleString("en-US");
+
+function mondayOf(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());const wd=(x.getDay()+6)%7;x.setDate(x.getDate()-wd);return x}
+function key(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function parseKey(k){const[a,b,c]=k.split("-").map(Number);return new Date(a,b-1,c)}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+// A week belongs to the month its Sunday falls in (matches the sheet: 28 Sep – 4 Oct counts for October)
+function monthOf(k){const s=addDays(parseKey(k),6);return s.getFullYear()*12+s.getMonth()}
+
+function blank(){const it={};ITEMS.forEach(i=>it[i.k]=i.t==="daily"?[0,0,0,0,0,0,0]:0);return it}
+function norm(items){const b=blank();if(items)for(const i of ITEMS){const v=items[i.k];if(i.t==="daily"&&Array.isArray(v))b[i.k]=b[i.k].map((_,j)=>v[j]?1:0);else if(i.t!=="daily"&&typeof v==="number")b[i.k]=v;else if(i.t!=="daily"&&Array.isArray(v))b[i.k]=v.reduce((a,x)=>a+(x?1:0),0)}return b}
+function qty(i,v){return i.t==="daily"?v.reduce((a,b)=>a+b,0):v}
+function score(items){let s=0;for(const i of ITEMS)s+=qty(i,items[i.k])*i.p;return s}
+const WEEK_MAX=ITEMS.reduce((s,i)=>s+i.p*(i.t==="daily"?7:i.t==="once"?1:(i.cap??i.target)),0);
+
+let weeks={};           // key -> items
+let cur=key(mondayOf(new Date()));
+let db=null, saveTimer=null, pendingKey=null;
+
+function lsGet(){try{return JSON.parse(localStorage.getItem("cetele-weeks")||"{}")}catch(e){return{}}}
+function lsSet(){try{localStorage.setItem("cetele-weeks",JSON.stringify(weeks))}catch(e){}}
+weeks=lsGet();
+
+function render(){
+  const mon=parseKey(cur),sun=addDays(mon,6);
+  const sameM=mon.getMonth()===sun.getMonth();
+  document.getElementById("range").textContent=
+    `${mon.getDate()}${sameM?"":" "+MONTHS[mon.getMonth()].slice(0,3)} – ${sun.getDate()} ${MONTHS[sun.getMonth()].slice(0,3)}`;
+  const items=norm(weeks[cur]);
+  const wk=score(items);
+  document.getElementById("wk").textContent=fmt(wk);
+  document.getElementById("wkmax").textContent=`of ${fmt(WEEK_MAX)} · ${Math.round(wk/WEEK_MAX*100)}%`;
+  document.getElementById("barfill").style.width=Math.min(100,wk/WEEK_MAX*100)+"%";
+  const m=monthOf(cur);let mt=0,n=0;
+  for(const k in weeks)if(monthOf(k)===m){mt+=score(norm(weeks[k]));n++}
+  document.getElementById("mlabel").textContent=MONTHS[m%12];
+  document.getElementById("mo").textContent=fmt(mt);
+  document.getElementById("mweeks").textContent=`${n} week${n===1?"":"s"} logged`;
+
+  const todayIdx=cur===key(mondayOf(new Date()))?(new Date().getDay()+6)%7:(parseKey(cur)>new Date()?-2:7);
+  const main=document.getElementById("main");main.innerHTML="";
+  const groups=[...new Set(ITEMS.map(i=>i.g))];
+  for(const g of groups){
+    const sec=document.createElement("section");
+    const its=ITEMS.filter(i=>i.g===g);
+    const gs=its.reduce((s,i)=>s+qty(i,items[i.k])*i.p,0);
+    sec.innerHTML=`<h2>${g}<span>${fmt(gs)}</span></h2>`;
+    for(const i of its){
+      const v=items[i.k],q=qty(i,v);
+      const max=i.t==="daily"?7:i.t==="once"?1:i.cap;
+      const row=document.createElement("div");row.className="row"+(i.t==="daily"?" daily":"");
+      const open=max!=null?(max-q)*i.p:null;
+      row.innerHTML=`<div><div class="name">${i.n}</div><div class="meta">${i.p} × ${q}${max!=null?"/"+max:""} = <b>${fmt(q*i.p)}</b>${open>0?` · ${fmt(open)} open`:""}${i.note?" · "+i.note:""}</div></div>`;
+      const ctl=document.createElement("div");
+      if(i.t==="daily"){
+        ctl.className="days";
+        v.forEach((on,d)=>{const b=document.createElement("button");
+          b.className="day"+(on?" on":"")+(d===todayIdx?" now":"")+(todayIdx!==7&&d>todayIdx&&todayIdx>=0||todayIdx===-2?" future":"");
+          b.innerHTML=`<span>${DAYS[d]}</span><span class="dot"></span>`;
+          b.setAttribute("aria-label",`${i.n} ${["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][d]}`);
+          b.setAttribute("aria-pressed",on?"true":"false");
+          b.onclick=()=>{v[d]=v[d]?0:1;change(items)};ctl.appendChild(b)});
+      }else if(i.t==="once"){
+        const b=document.createElement("button");b.className="toggle"+(v?" on":"");b.textContent=v?"Done":"Mark done";
+        b.setAttribute("aria-pressed",v?"true":"false");
+        b.onclick=()=>{items[i.k]=v?0:1;change(items)};ctl.appendChild(b);
+      }else{
+        ctl.className="step";
+        const m1=document.createElement("button");m1.textContent="−";m1.disabled=v<=0;m1.setAttribute("aria-label","Remove one "+i.n);
+        const o=document.createElement("output");o.textContent=v;
+        const p1=document.createElement("button");p1.textContent="+";p1.disabled=i.cap!=null&&v>=i.cap;p1.setAttribute("aria-label","Add one "+i.n);
+        m1.onclick=()=>{items[i.k]=Math.max(0,v-1);change(items)};
+        p1.onclick=()=>{items[i.k]=i.cap!=null?Math.min(i.cap,v+1):v+1;change(items)};
+        ctl.append(m1,o,p1);
+      }
+      row.appendChild(ctl);sec.appendChild(row);
+    }
+    main.appendChild(sec);
+  }
+}
+
+function setStatus(t){document.getElementById("status").textContent=t}
+
+function change(items){
+  weeks[cur]=items;lsSet();render();
+  if(!db){setStatus("Saved on this device only");return}
+  pendingKey=cur;setStatus("Saving…");
+  clearTimeout(saveTimer);saveTimer=setTimeout(flush,600);
+}
+let writing=false;
+async function flush(){
+  if(writing){saveTimer=setTimeout(flush,300);return}
+  const k=pendingKey;if(!k)return;pendingKey=null;writing=true;
+  const {error}=await db.from(TABLE).upsert({start:k,items:weeks[k]});
+  setStatus(error?"Could not save: "+error.message:"Saved");
+  writing=false;
+}
+
+document.getElementById("prev").onclick=()=>{cur=key(addDays(parseKey(cur),-7));render()};
+document.getElementById("next").onclick=()=>{cur=key(addDays(parseKey(cur),7));render()};
+document.getElementById("now").onclick=()=>{cur=key(mondayOf(new Date()));render()};
+
+render();
+async function load(){
+  const {data,error}=await db.from(TABLE).select("start,items");
+  if(error){setStatus("Could not load: "+error.message);return}
+  const next={};(data||[]).forEach(r=>next[r.start]=r.items);
+  if(pendingKey&&weeks[pendingKey])next[pendingKey]=weeks[pendingKey];
+  weeks=next;lsSet();render();setStatus("Synced");
+}
+if(SUPABASE_URL&&SUPABASE_ANON_KEY&&window.supabase){
+  db=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  load();
+  // refresh when you come back to the tab, so phone and laptop stay in step
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!pendingKey)load()});
+}else setStatus("Saved on this device only");
+</script>
+</body>
+</html>
